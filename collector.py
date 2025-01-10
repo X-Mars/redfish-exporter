@@ -292,7 +292,13 @@ class RedfishMetricsCollector:
 
         power_states = {"off": 0, "on": 1}
         # Get the server info for the labels
-        server_info = self.connect_server(systems['Members'][0]['@odata.id'])
+        server_info = {}
+        for member in systems['Members']:
+            self._systems_url = member['@odata.id']
+            info = self.connect_server(self._systems_url)
+            if info:
+                server_info.update(info)
+
         if not server_info:
             return
         self.manufacturer = server_info['Manufacturer']
@@ -414,7 +420,7 @@ class RedfishMetricsCollector:
             metrics.collect()
 
             yield metrics.mem_metrics_correctable
-            yield metrics.mem_metrics_unorrectable
+            yield metrics.mem_metrics_uncorrectable
             yield metrics.health_metrics
 
         # Get the firmware information
@@ -455,6 +461,8 @@ class RedfishMetricsCollector:
     def __exit__(self, exc_type, exc_val, exc_tb):
         logging.debug("Target %s: Deleting Redfish session with server %s", self.target, self.host)
 
+        response = None
+
         if self._auth_token:
             session_url = f"https://{self.target}{self._session_url}"
             headers = {"x-auth-token": self._auth_token}
@@ -466,7 +474,7 @@ class RedfishMetricsCollector:
                     session_url, verify=False, timeout=self._timeout, headers=headers
                 )
                 response.close()
-                
+
             except requests.exceptions.RequestException as e:
                 logging.error(
                     "Target %s: Error deleting session with server %s: %s",
